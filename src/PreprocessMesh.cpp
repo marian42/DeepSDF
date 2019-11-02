@@ -294,7 +294,7 @@ int main(int argc, char** argv) {
 
   std::string npyFileName;
   std::string plyFileNameOut;
-  std::string spatial_samples_npz;
+  std::string spatial_samples_npy = "";
   bool save_ply = true;
   bool test_flag = false;
   float variance = 0.005;
@@ -312,7 +312,7 @@ int main(int argc, char** argv) {
   app.add_option("--var", variance, "Point sampling variance, defaults to 0.005");
   app.add_flag("--sply", save_ply, "Save ply point cloud for visualization");
   app.add_flag("-t", test_flag, "test_flag");
-  app.add_option("-n", spatial_samples_npz, "spatial samples from file");
+  app.add_option("-n", spatial_samples_npy, "File name for input .npy file with custom sample points");
 
   CLI11_PARSE(app, argc, argv);
 
@@ -533,42 +533,64 @@ int main(int argc, char** argv) {
   KdVertexListTree kdTree_surf(3, kdVerts);
   kdTree_surf.buildIndex();
 
-  std::vector<Eigen::Vector3f> xyz;
-  std::vector<Eigen::Vector3f> xyz_surf;
   std::vector<float> sdf;
-  int num_samp_near_surf = (int)(47 * num_sample / 50);
-  std::cout << "num_samp_near_surf: " << num_samp_near_surf << std::endl;
-  SampleFromSurface(geom, xyz_surf, num_samp_near_surf / 2);
 
   auto start = std::chrono::high_resolution_clock::now();
-  SampleSDFNearSurface(
-      kdTree_surf,
-      vertices2,
-      xyz_surf,
-      normals2,
-      xyz,
-      sdf,
-      num_sample - num_samp_near_surf,
-      variance,
-      second_variance,
-      2,
-      11);
+    
+  bool useCustomSamplePoints = !spatial_samples_npy.empty();
+
+  if (useCustomSamplePoints) {
+    auto np_array = cnpy::npy_load(spatial_samples_npy);
+    auto data = np_array.data<float>();
+    auto pointCount = np_array.shape[0];
+
+    std::vector<Eigen::Vector3f> points;
+ 
+    for (int i = 0; i < pointCount; i++) {
+      auto x = data[pointCount * 0 + i];
+      auto y = data[pointCount * 1 + i];
+      auto z = data[pointCount * 2 + i];
+      points.push_back(Eigen::Vector3f(x, y, z));
+    }
+    
+    GetSDF(kdTree_surf, normals2, points, sdf, 11, false, sqrt(variance));
+    cnpy::npy_save(npyFileName, &sdf[0], {(long unsigned int)sdf.size()}, "w");
+  } else {
+    std::vector<Eigen::Vector3f> xyz;
+    std::vector<Eigen::Vector3f> xyz_surf;
+    int num_samp_near_surf = (int)(47 * num_sample / 50);
+    std::cout << "num_samp_near_surf: " << num_samp_near_surf << std::endl;
+    SampleFromSurface(geom, xyz_surf, num_samp_near_surf / 2);
+
+    SampleSDFNearSurface(
+        kdTree_surf,
+        vertices2,
+        xyz_surf,
+        normals2,
+        xyz,
+        sdf,
+        num_sample - num_samp_near_surf,
+        variance,
+        second_variance,
+        2,
+        11);
+
+    if (save_ply) {
+      writeSDFToPLY(xyz, sdf, plyFileNameOut, false, true);
+    }
+
+    std::cout << "num points sampled: " << xyz.size() << std::endl;
+    std::size_t save_npz = npyFileName.find("npz");
+    if (save_npz == std::string::npos)
+      writeSDFToNPY(xyz, sdf, npyFileName);
+    else {
+      writeSDFToNPZ(xyz, sdf, npyFileName, true);
+    }
+  }
 
   auto finish = std::chrono::high_resolution_clock::now();
   auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(finish - start).count();
   std::cout << "Time elapsed: " << elapsed << std::endl;
-
-  if (save_ply) {
-    writeSDFToPLY(xyz, sdf, plyFileNameOut, false, true);
-  }
-
-  std::cout << "num points sampled: " << xyz.size() << std::endl;
-  std::size_t save_npz = npyFileName.find("npz");
-  if (save_npz == std::string::npos)
-    writeSDFToNPY(xyz, sdf, npyFileName);
-  else {
-    writeSDFToNPZ(xyz, sdf, npyFileName, true);
-  }
 
   return 0;
 }
