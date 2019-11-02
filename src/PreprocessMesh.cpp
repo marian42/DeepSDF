@@ -84,6 +84,56 @@ void SampleFromSurface(
   }
 }
 
+void GetSDF(
+    KdVertexListTree& kdTree,
+    std::vector<Eigen::Vector3f>& normals,
+    std::vector<Eigen::Vector3f>& samplePoints,
+    std::vector<Eigen::Vector3f>& surfacePoints,
+    std::vector<float>& sdfs,
+    int num_votes,
+    bool discardAmbiguousPoints,
+    float pointPlaneDistanceThreshold) {
+  std::vector<Eigen::Vector3f> points_used;
+  for (int s = 0; s < (int)samplePoints.size(); s++) {
+    auto point = samplePoints[s];
+    std::vector<int> closest_indices(num_votes);
+    std::vector<float> closest_distances(num_votes);
+    kdTree.knnSearch(point.data(), num_votes, closest_indices.data(), closest_distances.data());
+
+    int samplesOutside = 0;
+    float distance;
+
+    for (int i = 0; i < num_votes; i++) {
+      uint32_t closest_index = closest_indices[i];
+      Eigen::Vector3f closest_point = surfacePoints[closest_index];
+      Eigen::Vector3f ray_vec = point - closest_point;
+      float distanceToClosestSurfacePoint = ray_vec.norm();
+
+      if (i == 0) {
+        // if close to the surface, use point plane distance
+        if (distanceToClosestSurfacePoint < pointPlaneDistanceThreshold)
+          distance = fabs(normals[closest_index].dot(ray_vec));
+        else
+          distance = distanceToClosestSurfacePoint;
+      }
+
+      if (normals[closest_index].dot(ray_vec / distanceToClosestSurfacePoint) > 0) {
+        samplesOutside++;
+      }
+    }
+
+    if (!discardAmbiguousPoints || (samplesOutside == 0) || (samplesOutside == num_votes)) {
+      points_used.push_back(point);
+      bool inside = samplesOutside <= (num_votes / 2);
+      sdfs.push_back(inside ? -distance : distance);
+    }
+  }
+
+  if (discardAmbiguousPoints) {
+    samplePoints = points_used;
+  }
+}
+
 void SampleSDFNearSurface(
     KdVertexListTree& kdTree,
     std::vector<Eigen::Vector3f>& vertices,
@@ -101,7 +151,6 @@ void SampleSDFNearSurface(
   std::random_device seeder;
   std::mt19937 generator(seeder());
   std::uniform_real_distribution<float> rand_dist(0.0, 1.0);
-  std::vector<Eigen::Vector3f> xyz_used;
   std::vector<Eigen::Vector3f> second_samples;
 
   std::random_device rd;
@@ -131,46 +180,7 @@ void SampleSDFNearSurface(
         rand_dist(generator) * bounding_cube_dim - bounding_cube_dim / 2));
   }
 
-  // now compute sdf for each xyz sample
-  for (int s = 0; s < (int)xyz.size(); s++) {
-    Eigen::Vector3f samp_vert = xyz[s];
-    std::vector<int> cl_indices(num_votes);
-    std::vector<float> cl_distances(num_votes);
-    kdTree.knnSearch(samp_vert.data(), num_votes, cl_indices.data(), cl_distances.data());
-
-    int num_pos = 0;
-    float sdf;
-
-    for (int ind = 0; ind < num_votes; ind++) {
-      uint32_t cl_ind = cl_indices[ind];
-      Eigen::Vector3f cl_vert = vertices[cl_ind];
-      Eigen::Vector3f ray_vec = samp_vert - cl_vert;
-      float ray_vec_leng = ray_vec.norm();
-
-      if (ind == 0) {
-        // if close to the surface, use point plane distance
-        if (ray_vec_leng < stdv)
-          sdf = fabs(normals[cl_ind].dot(ray_vec));
-        else
-          sdf = ray_vec_leng;
-      }
-
-      float d = normals[cl_ind].dot(ray_vec / ray_vec_leng);
-      if (d > 0)
-        num_pos++;
-    }
-
-    // all or nothing , else ignore the point
-    if ((num_pos == 0) || (num_pos == num_votes)) {
-      xyz_used.push_back(samp_vert);
-      if (num_pos <= (num_votes / 2)) {
-        sdf = -sdf;
-      }
-      sdfs.push_back(sdf);
-    }
-  }
-
-  xyz = xyz_used;
+  GetSDF(kdTree, normals, xyz, vertices, sdfs, num_votes, true, stdv);
 }
 
 void writeSDFToNPY(
@@ -547,7 +557,7 @@ int main(int argc, char** argv) {
 
   auto finish = std::chrono::high_resolution_clock::now();
   auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(finish - start).count();
-  std::cout << elapsed << std::endl;
+  std::cout << "Time elapsed: " << elapsed << std::endl;
 
   if (save_ply) {
     writeSDFToPLY(xyz, sdf, plyFileNameOut, false, true);
