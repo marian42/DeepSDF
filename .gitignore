@@ -1,3 +1,7 @@
 build/**
 bin/**
 **/__pycache__/**
+*.npy
+*.npz
+*.obj
+.vscode/**
