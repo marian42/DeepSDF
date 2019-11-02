@@ -327,8 +327,6 @@ int main(int argc, char** argv) {
     num_sample = 250000;
   }
 
-  std::cout << spatial_samples_npz << std::endl;
-
   glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
   glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
   glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
@@ -352,7 +350,6 @@ int main(int argc, char** argv) {
       }
     }
 
-    //      const int total_num_indices = total_num_faces * 3;
     pangolin::ManagedImage<uint8_t> new_buffer(3 * sizeof(uint32_t), total_num_faces);
 
     pangolin::Image<uint32_t> new_ibo =
@@ -509,19 +506,18 @@ int main(int argc, char** argv) {
   }
 
   std::cout << meshFileName << std::endl;
-  std::cout << (float)(wrong_obs) / float(total_obs) << std::endl;
-  std::cout << (float)(bad_tri) / float(num_tri) << std::endl;
+  std::cout << "Wrong obs: " << (float)(wrong_obs) / float(total_obs) << std::endl;
+  std::cout << "Bad triangles: " << (float)(bad_tri) / float(num_tri) << std::endl;
 
   float wrong_ratio = (float)(wrong_obs) / float(total_obs);
   float bad_tri_ratio = (float)(bad_tri) / float(num_tri);
 
   if (wrong_ratio > rejection_criteria_obs || bad_tri_ratio > rejection_criteria_tri) {
     std::cout << "mesh rejected" << std::endl;
-    //    return 0;
+    exit(1);
   }
 
   std::vector<Eigen::Vector3f> vertices2;
-  //    std::vector<Eigen::Vector3f> vertices_all;
   std::vector<Eigen::Vector3f> normals2;
 
   for (unsigned int v = 0; v < point_verts.size(); v++) {
