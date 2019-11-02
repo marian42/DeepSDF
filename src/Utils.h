@@ -17,11 +17,6 @@ struct KdVertexList {
     return points_.size();
   }
 
-  inline float kdtree_distance(const float* p1, const size_t idx_p2, size_t /*size*/) const {
-    Eigen::Map<const Eigen::Vector3f> p(p1);
-    return (p - points_[idx_p2]).squaredNorm();
-  }
-
   inline float kdtree_get_pt(const size_t idx, int dim) const {
     return points_[idx](dim);
   }
@@ -29,6 +24,10 @@ struct KdVertexList {
   template <class BBOX>
   bool kdtree_get_bbox(BBOX& /*bb*/) const {
     return false;
+  }
+
+  Eigen::Vector3f operator [] (const size_t i) const {
+    return this->points_[i];
   }
 
  private:

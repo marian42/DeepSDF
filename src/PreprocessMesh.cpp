@@ -86,9 +86,8 @@ void SampleFromSurface(
 
 void GetSDF(
     KdVertexListTree& kdTree,
-    std::vector<Eigen::Vector3f>& normals,
+    std::vector<Eigen::Vector3f>& surfaceNormals,
     std::vector<Eigen::Vector3f>& samplePoints,
-    std::vector<Eigen::Vector3f>& surfacePoints,
     std::vector<float>& sdfs,
     int num_votes,
     bool discardAmbiguousPoints,
@@ -105,19 +104,19 @@ void GetSDF(
 
     for (int i = 0; i < num_votes; i++) {
       uint32_t closest_index = closest_indices[i];
-      Eigen::Vector3f closest_point = surfacePoints[closest_index];
+      Eigen::Vector3f closest_point = kdTree.dataset[closest_index];
       Eigen::Vector3f ray_vec = point - closest_point;
       float distanceToClosestSurfacePoint = ray_vec.norm();
 
       if (i == 0) {
         // if close to the surface, use point plane distance
         if (distanceToClosestSurfacePoint < pointPlaneDistanceThreshold)
-          distance = fabs(normals[closest_index].dot(ray_vec));
+          distance = fabs(surfaceNormals[closest_index].dot(ray_vec));
         else
           distance = distanceToClosestSurfacePoint;
       }
 
-      if (normals[closest_index].dot(ray_vec / distanceToClosestSurfacePoint) > 0) {
+      if (surfaceNormals[closest_index].dot(ray_vec / distanceToClosestSurfacePoint) > 0) {
         samplesOutside++;
       }
     }
@@ -180,7 +179,7 @@ void SampleSDFNearSurface(
         rand_dist(generator) * bounding_cube_dim - bounding_cube_dim / 2));
   }
 
-  GetSDF(kdTree, normals, xyz, vertices, sdfs, num_votes, true, stdv);
+  GetSDF(kdTree, normals, xyz, sdfs, num_votes, true, stdv);
 }
 
 void writeSDFToNPY(
