@@ -238,6 +238,18 @@ float BoundingCubeNormalization(
       vertices(2, i) /= maxDistance;
     }
     maxDistance = 1;
+  } else {
+    // Ft into unit box
+    auto sizeX = xMax - xMin;
+    auto sizeY = yMax - yMin;
+    auto sizeZ = zMax - zMin;
+    auto size = fmax(sizeX, fmax(sizeY, sizeZ)) / 2;
+    for (size_t i = 0; i < numVertices; i++) {
+      vertices(0, i) /= size;
+      vertices(1, i) /= size;
+      vertices(2, i) /= size;
+    }
+    maxDistance /= size;
   }
 
   return maxDistance;

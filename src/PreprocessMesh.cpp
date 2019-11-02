@@ -386,8 +386,9 @@ int main(int argc, char** argv) {
 
   pangolin::Image<uint32_t> modelFaces = pangolin::get<pangolin::Image<uint32_t>>(
       geom.objects.begin()->second.attributes["vertex_indices"]);
-
-  float max_dist = BoundingCubeNormalization(geom, true);
+    
+  bool useCustomSamplePoints = !spatial_samples_npy.empty();
+  float max_dist = BoundingCubeNormalization(geom, !useCustomSamplePoints);
 
   if (vis)
     pangolin::CreateWindowAndBind("Main", 640, 480);
@@ -532,8 +533,6 @@ int main(int argc, char** argv) {
   std::vector<float> sdf;
 
   auto start = std::chrono::high_resolution_clock::now();
-    
-  bool useCustomSamplePoints = !spatial_samples_npy.empty();
 
   if (useCustomSamplePoints) {
     auto np_array = cnpy::npy_load(spatial_samples_npy);
